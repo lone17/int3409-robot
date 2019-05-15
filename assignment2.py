@@ -141,4 +141,4 @@ while True:
     for title, img in frames.items():
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         cv2.imshow(title, img)
-    cv2.waitKey(0)
+    cv2.waitKey(1)

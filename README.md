@@ -9,4 +9,4 @@
 
 From left to right: original frame, object detection, trajectories on topview, trajectories on semantic topview
 
-![](Screenshot from 2019-05-16 02-55-51.png)
+![](images/Screenshot from 2019-05-16 02-55-51.png)
