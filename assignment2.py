@@ -13,6 +13,7 @@ import ai2thor.controller
 import keyboard
 
 import yolov3_darknet as yolo
+from topview import TrajectoryDrawer
 
 def adjust_gamma(img, gamma=0.3):
 	# build a lookup table mapping the pixel values [0, 255] to
@@ -49,6 +50,7 @@ def process(img):
     return img
 
 def get_frames(controller):
+    should_update = False
     last_event = controller.last_event
     rot = last_event.metadata['agent']['rotation']
     rot_y = rot['y']
@@ -56,22 +58,30 @@ def get_frames(controller):
         rot_y = 0
     if keyboard.is_pressed('w'):
         event = controller.step(dict(action='MoveAhead'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('s'):
         event = controller.step(dict(action='MoveBack'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('a'):
         event = controller.step(dict(action='MoveLeft'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('d'):
         event = controller.step(dict(action='MoveRight'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('up'):
         event = controller.step(dict(action='LookUp'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('down'):
         event = controller.step(dict(action='LookDown'))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('left'):
         rot['y'] = rot_y - 10
         event = controller.step(dict(action='Rotate', rotation=rot))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('right'):
         rot['y'] = rot_y + 10
         event = controller.step(dict(action='Rotate', rotation=rot))
+        should_update = event.metadata['lastActionSuccess']
     elif keyboard.is_pressed('f'):
         objects = [o for o in last_event.metadata['objects'] if o['visible'] and o['openable']]
         if len(objects) == 0:
@@ -82,56 +92,53 @@ def get_frames(controller):
             event = controller.step(dict(action='CloseObject', objectId=nearest_obj['objectId']))
         else:
             event = controller.step(dict(action='OpenObject', objectId=nearest_obj['objectId']))
+        should_update = event.metadata['lastActionSuccess']
     else:
         event = last_event
 
-    # topdown_event = controller.step({'action': 'ToggleMapView'})
-    # controller.step({'action': 'ToggleMapView'})
-    return (
-        event.frame,
-        # event.class_segmentation_frame,
-        # event.instance_segmentation_frame
-    )
+
+    if should_update:
+        trajectories, trajectories_semantic = drawer.draw(event.metadata['agent']['position'])
+        return {
+            'object detection': yolo.process(event.frame),
+            'trajectories': trajectories,
+            'trajectories on semantic map' : trajectories_semantic,
+            # event.instance_segmentation_frame
+        }
+    else:
+        return None
+
+
+SCREEN_SIZE = 450
+GRID_SIZE = 0.2
 
 controller = ai2thor.controller.Controller()
-controller.start(player_screen_width=800, player_screen_height=800)
+controller.start(player_screen_width=SCREEN_SIZE, player_screen_height=SCREEN_SIZE)
 
 # Kitchens:       FloorPlan1 - FloorPlan30
 # Living rooms:   FloorPlan201 - FloorPlan230
 # Bedrooms:       FloorPlan301 - FloorPlan330
 # Bathrooms:      FloorPLan401 - FloorPlan430
-controller.reset('FloorPlan28')
+controller.reset('FloorPlan30')
 
 # gridSize specifies the coarseness of the grid that the agent navigates on
 event = controller.step(dict(action='Initialize',
-                             # renderClassImage=True,
-                             # renderObjectImage=True,
-                             gridSize=0.25))
+                             renderClassImage=True,
+                             renderObjectImage=True,
+                             makeAgentVisible=False,
+                             gridSize=GRID_SIZE))
 
-ax = []
-im = []
+rot = event.metadata['agent']['rotation']
+rot['y'] = 0
+controller.step(dict(action='Rotate', rotation=rot))
 
-num_frames = 1
-
-for i in range(num_frames):
-    tmp_ax = plt.subplot(1, num_frames, i+1)
-    tmp_ax.axis('off')
-    ax.append(tmp_ax)
-
-frames = get_frames(controller)
-# while None in frames:
-#     frames = get_frames(controller)
-
-for i in range(num_frames):
-    img = frames[i]
-    img = process(img)
-    im.append(ax[i].imshow(img))
+drawer = TrajectoryDrawer(controller)
 
 while True:
     frames = get_frames(controller)
-    # if None in frames:
-    for i in range(num_frames):
-        img = frames[i]
-        img = process(img)
-        im[i].set_data(img)
-    plt.pause(0.00001)
+    if frames is None:
+        continue
+    for title, img in frames.items():
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        cv2.imshow(title, img)
+    cv2.waitKey(0)

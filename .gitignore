@@ -1,0 +1,4 @@
+env/
+rootenv/
+thor*
+__pycache__
