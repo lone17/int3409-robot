@@ -3,6 +3,7 @@
 ### Team member
 * Vũ Minh Hiếu
 * Phí Hoàng Linh
+* Phạm Tuấn Dũng
 
 ### Preview (challenge 1 + 2)
 
